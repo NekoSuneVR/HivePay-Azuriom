@@ -189,8 +189,7 @@ class HiveMethod extends PaymentMethod
 
             if (!$to || strtolower($to) !== strtolower($recvAccount)) continue;
             if (!$txMemo || trim($txMemo) !== trim($memo)) continue;
-
-            if (abs($amount - $expectedAmount) > 0.0005) continue;
+            if ($amount !== $expectedAmount) continue;
 
             // store match
             $matches[] = [
