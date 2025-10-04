@@ -139,159 +139,164 @@ class HiveMethod extends PaymentMethod
      * @throws \Exception
      */
     protected function verifyPaymentOnChain(Payment $payment)
-    {
-        $memo = $payment->transaction_id;
-        $expectedAmount = $payment->price; // string
-        $expectedCurrency = $payment->currency;
+{
+    $memo = $payment->transaction_id;
+    $expectedAmount = $payment->price; // string
+    $expectedCurrency = $payment->currency;
 
-        if (!$memo || !$expectedAmount) {
-            throw new \Exception('Payment missing hive metadata (memo/amount).');
-        }
-
-        $recvAccount = $this->gateway['account'] ?? 'chisfund';
-        if (!$recvAccount) {
-            throw new \Exception('Receiving Hive account not configured.');
-        }
-
-        $nodeUrl = $this->gateway['rpc'] ?? 'https://api.hive.blog';
-
-        // We'll use account_history_api.get_account_history which supports querying history with pagination.
-        // Request: POST to nodeUrl with JSON-RPC body:
-        // {"jsonrpc":"2.0","method":"account_history_api.get_account_history","params":["<account>", -1, 1000], "id":1}
-        //
-        // Then filter for transfer ops. Limit is 1000 per call; for larger work you must paginate.
-        $limit = 1000;
-        $start = -1; // -1 to request latest according to docs (then you get last `limit` ops)
-
-        $body = [
-            'jsonrpc' => '2.0',
-            'method'  => 'account_history_api.get_account_history',
-            'params'  => [$recvAccount, $start, $limit],
-            'id'      => 1,
-        ];
-
-        $resp = Http::timeout(15)->post($nodeUrl, $body);
-
-        if (!$resp->ok()) {
-            throw new \Exception('Failed to query Hive RPC: HTTP ' . $resp->status());
-        }
-
-        $result = $resp->json();
-
-        // Some nodes return 'result' with array of ops; others embed differently — be defensive.
-        $ops = $result['result'] ?? $result['result']['history'] ?? $result['result']['history'] ?? null;
-        if ($ops === null && isset($result['result']) && is_array($result['result'])) {
-            // Newer account_history_api returns an array of objects like [{id, op, ...}, ...]
-            $ops = $result['result'];
-        }
-
-        if (!is_array($ops)) {
-            // As fallback, try condenser_api.get_account_history method
-            $body2 = [
-                'jsonrpc' => '2.0',
-                'method' => 'condenser_api.get_account_history',
-                'params' => [$recvAccount, -1, $limit],
-                'id' => 2,
-            ];
-            $resp2 = Http::timeout(15)->post($nodeUrl, $body2);
-            if ($resp2->ok()) {
-                $r2 = $resp2->json();
-                $ops = $r2['result'] ?? [];
-            } else {
-                throw new \Exception('RPC returned unexpected response while attempting fallback.');
-            }
-        }
-
-        // ops elements may be arrays [index, [op_name, op_data]] or objects.
-        foreach ($ops as $entry) {
-            // Normalize op tuple
-            // Two common shapes:
-            // 1) [ index, [ "transfer", { from, to, amount, memo } ] ]
-            // 2) { "op": ["transfer", {...}], "trx_id": "...", "timestamp": "...", ... }
-            $opName = null;
-            $opData = null;
-            $trxId = null;
-            $timestamp = null;
-
-            if (is_array($entry) && count($entry) >= 2 && is_array($entry[1])) {
-                $opName = $entry[1][0] ?? null;
-                $opData = $entry[1][1] ?? null;
-                // sometimes trx id at entry[1]['trx_id'] but uncertain
-                $trxId = $entry[2] ?? null;
-            } elseif (is_array($entry) && isset($entry['op'])) {
-                $opName = $entry['op'][0] ?? null;
-                $opData = $entry['op'][1] ?? null;
-                $trxId = $entry['trx_id'] ?? ($entry['trx_id'] ?? null);
-                $timestamp = $entry['timestamp'] ?? null;
-            } elseif (is_object($entry)) {
-                $arr = (array)$entry;
-                if (isset($arr['op'])) {
-                    $opName = $arr['op'][0] ?? null;
-                    $opData = $arr['op'][1] ?? null;
-                    $trxId = $arr['trx_id'] ?? null;
-                    $timestamp = $arr['timestamp'] ?? null;
-                }
-            }
-
-            if ($opName !== 'transfer' || !is_array($opData)) {
-                continue;
-            }
-
-            $to = $opData['to'] ?? ($opData->to ?? null);
-            $amountStr = $opData['amount'] ?? ($opData->amount ?? null); // e.g. "12.345 HBD"
-            $memoField = $opData['memo'] ?? ($opData->memo ?? null);
-            $from = $opData['from'] ?? ($opData->from ?? null);
-
-            if (!$to || !$amountStr) {
-                continue;
-            }
-
-            // check recipient
-            if (strtolower($to) !== strtolower($recvAccount)) {
-                continue;
-            }
-
-            // check memo contains our token (exact match or contains)
-            if (!$memoField || strpos($memoField, $memo) === false) {
-                continue;
-            }
-
-            // parse amount & currency
-            // "12.345 HBD"
-            $parts = preg_split('/\s+/', trim($amountStr));
-            if (count($parts) < 2) {
-                continue;
-            }
-
-            $amt = floatval($parts[0]);
-            $cur = strtoupper($parts[1]);
-
-            // require currency match (e.g., HBD)
-            if ($cur !== strtoupper($expectedCurrency)) {
-                continue;
-            }
-
-            // compare amounts: allow small rounding tolerance (0.0001)
-            $expectedFloat = floatval($expectedAmount);
-            if (abs($amt - $expectedFloat) > 0.0005) {
-                // if amount mismatch, you might still accept if >= expected; adjust policy
-                continue;
-            }
-
-            // Payment verified
-            $providerTx = $trxId ?? (is_string($timestamp) ? $timestamp . ':' . $from : null);
-
-            return [
-                'ok' => true,
-                'provider_tx' => $providerTx,
-                'matched_from' => $from,
-                'matched_amount' => $amountStr,
-                'matched_memo' => $memoField,
-            ];
-        }
-
-        return ['ok' => false, 'reason' => 'no matching transfer found in latest account history'];
+    if (!$memo || !$expectedAmount) {
+        throw new \Exception('Payment missing hive metadata (memo/amount).');
     }
+
+    $recvAccount = $this->gateway['account'] ?? 'chisfund';
+    if (!$recvAccount) {
+        throw new \Exception('Receiving Hive account not configured.');
+    }
+
+    $nodeUrl = $this->gateway['rpc'] ?? 'https://api.hive.blog';
+
+    $limit = 1000;
+    $start = -1; // latest ops
+
+    $body = [
+        'jsonrpc' => '2.0',
+        'method'  => 'account_history_api.get_account_history',
+        'params'  => [$recvAccount, $start, $limit],
+        'id'      => 1,
+    ];
+
+    $resp = Http::timeout(15)->post($nodeUrl, $body);
+
+    if (!$resp->ok()) {
+        throw new \Exception('Failed to query Hive RPC: HTTP ' . $resp->status());
+    }
+
+    $result = $resp->json();
+
+    // defensive: find ops array
+    $ops = $result['result'] ?? $result['result']['history'] ?? [];
+    if (!is_array($ops)) {
+        // fallback using condenser API
+        $body2 = [
+            'jsonrpc' => '2.0',
+            'method' => 'condenser_api.get_account_history',
+            'params' => [$recvAccount, -1, $limit],
+            'id' => 2,
+        ];
+        $resp2 = Http::timeout(15)->post($nodeUrl, $body2);
+        $r2 = $resp2->json();
+        $ops = $r2['result'] ?? [];
+    }
+
+    \Log::debug('Hive RPC response', [
+        'payment_id' => $payment->id,
+        'memo' => $memo,
+        'expected_amount' => $expectedAmount,
+        'expected_currency' => $expectedCurrency,
+        'recvAccount' => $recvAccount,
+        'sample_ops' => array_slice($ops, 0, 5),
+    ]);
+
+    foreach ($ops as $entry) {
+        $opName = null;
+        $opData = null;
+        $trxId = null;
+        $timestamp = null;
+
+        // normalize different RPC response formats
+        if (is_array($entry) && count($entry) >= 2 && is_array($entry[1])) {
+            $opName = $entry[1][0] ?? null;
+            $opData = $entry[1][1] ?? null;
+            $trxId = $entry[2] ?? null;
+        } elseif (is_array($entry) && isset($entry['op'])) {
+            $opName = $entry['op'][0] ?? null;
+            $opData = $entry['op'][1] ?? null;
+            $trxId = $entry['trx_id'] ?? null;
+            $timestamp = $entry['timestamp'] ?? null;
+        } elseif (is_object($entry)) {
+            $arr = (array)$entry;
+            if (isset($arr['op'])) {
+                $opName = $arr['op'][0] ?? null;
+                $opData = $arr['op'][1] ?? null;
+                $trxId = $arr['trx_id'] ?? null;
+                $timestamp = $arr['timestamp'] ?? null;
+            }
+        }
+
+        if ($opName !== 'transfer' || !is_array($opData)) {
+            continue;
+        }
+
+        $to = $opData['to'] ?? ($opData->to ?? null);
+        $amountStr = $opData['amount'] ?? ($opData->amount ?? null);
+        $memoField = $opData['memo'] ?? ($opData->memo ?? null);
+        $from = $opData['from'] ?? ($opData->from ?? null);
+
+        // debug each transfer op
+        \Log::debug('Checking transfer op', [
+            'to' => $to,
+            'from' => $from,
+            'amount' => $amountStr,
+            'memo' => $memoField,
+            'payment_memo' => $memo,
+            'expected_amount' => $expectedAmount,
+            'expected_currency' => $expectedCurrency,
+        ]);
+
+        if (!$to || !$amountStr) {
+            continue;
+        }
+
+        if (strtolower($to) !== strtolower($recvAccount)) {
+            continue;
+        }
+
+        if (!$memoField || strpos($memoField, $memo) === false) {
+            continue;
+        }
+
+        $parts = preg_split('/\s+/', trim($amountStr));
+        if (count($parts) < 2) {
+            continue;
+        }
+
+        $amt = floatval($parts[0]);
+        $cur = strtoupper(trim($parts[1]));
+
+        if ($cur !== strtoupper(trim($expectedCurrency))) {
+            continue;
+        }
+
+        $expectedFloat = floatval($expectedAmount);
+
+        // allow small rounding tolerance or accept slightly higher
+        if (abs($amt - $expectedFloat) > 0.001 && $amt < $expectedFloat) {
+            continue;
+        }
+
+        // Payment verified
+        $providerTx = $trxId ?? (is_string($timestamp) ? $timestamp . ':' . $from : null);
+
+        return [
+            'ok' => true,
+            'provider_tx' => $providerTx,
+            'matched_from' => $from,
+            'matched_amount' => $amountStr,
+            'matched_memo' => $memoField,
+        ];
+    }
+
+    \Log::debug('No matching transfer found', [
+        'payment_id' => $payment->id,
+        'recent_ops' => array_slice($ops, 0, 5),
+        'memo' => $memo,
+        'expected_amount' => $expectedAmount,
+        'expected_currency' => $expectedCurrency,
+    ]);
+
+    return ['ok' => false, 'reason' => 'no matching transfer found in latest account history'];
+}
+
 
     /**
      * Success redirect after user returns to site (if you want a thank-you page)
