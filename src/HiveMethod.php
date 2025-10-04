@@ -190,7 +190,7 @@ class HiveMethod extends PaymentMethod
             // API returns "value" as float, currency can be inferred from payment currency
 
             // compare amounts with tolerance
-            if (abs($amount - $expectedAmount) > 0.0005) {
+            if (abs($amount - $expectedAmount) > 0.000) {
                 continue;
             }
 
