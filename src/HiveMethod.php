@@ -143,81 +143,72 @@ class HiveMethod extends PaymentMethod
     $memo = $payment->transaction_id;
     $expectedAmount = (string)$payment->price; // exact string match
     $recvAccount = $this->gateway['account'] ?? 'chisfund';
+    $explorerUrl = "https://api.nekosunevr.co.uk/v5/pay/gateways/api/hive/";
 
     if (!$memo || !$expectedAmount) {
         throw new \Exception('Payment missing hive metadata (memo/amount).');
     }
 
-    // Fetch transactions from your API
-    $accountUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/address/{$recvAccount}";
-    $resp = Http::timeout(15)->get($accountUrl);
-
-    if (!$resp->ok()) {
-        throw new \Exception('Failed to query Hive account: HTTP ' . $resp->status());
+    // --- 1. Get all transaction IDs for account ---
+    $addressResp = Http::timeout(15)->get($explorerUrl . "address/{$recvAccount}");
+    if (!$addressResp->ok()) {
+        throw new \Exception('Failed to fetch address info: HTTP ' . $addressResp->status());
     }
-
-    $accountData = $resp->json();
-    $transactions = $accountData['transactions'] ?? [];
+    $transactions = $addressResp->json()['transactions'] ?? [];
 
     if (empty($transactions)) {
-        return ['ok' => false, 'reason' => 'no transactions found for account'];
+        return ['exists' => false, 'txid' => '', 'conf' => ''];
     }
 
-    $matches = [];
-
-    // Scan each transaction
+    // --- 2. Scan each transaction ---
     foreach ($transactions as $txid) {
-        $txUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/tx/{$recvAccount}/{$txid}";
-        $txResp = Http::timeout(15)->get($txUrl);
+        try {
+            $txResp = Http::timeout(15)->get($explorerUrl . "tx/{$recvAccount}/{$txid}");
+            if (!$txResp->ok()) {
+                \Log::warning("Failed to fetch tx $txid for $recvAccount", ['status' => $txResp->status()]);
+                continue;
+            }
 
-        if (!$txResp->ok()) {
-            \Log::warning("Failed to fetch tx $txid for $recvAccount", ['status' => $txResp->status()]);
-            continue;
-        }
+            $txData = $txResp->json();
 
-        $tx = $txResp->json();
+            // Optional: skip transactions after certain timestamp
+            if (isset($txData['blocktime']) && $txData['blocktime'] > $payment->created_at->timestamp) {
+                continue;
+            }
 
-        foreach ($tx['vout'] ?? [] as $vout) {
-            $to = $vout['address'] ?? null;
-            $txMemo = $vout['memo'] ?? null;
-            $amount = isset($vout['value']) ? (string)$vout['value'] : null;
+            foreach ($txData['vout'] ?? [] as $vout) {
+                $to = $vout['address'] ?? null;
+                $txMemo = $vout['memo'] ?? null;
+                $amount = isset($vout['value']) ? (string)$vout['value'] : null;
 
-            \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $vout]);
+                \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $vout]);
 
-            // exact match checks
-            if ($to !== $recvAccount) continue;
-            if ($txMemo !== $memo) continue;
-            if ($amount !== $expectedAmount) continue;
+                if ($to !== $recvAccount) continue;
+                if ($txMemo !== $memo) continue;
+                if ($amount !== $expectedAmount) continue;
 
-            // store match
-            $matches[] = [
-                'txid' => $tx['txid'] ?? $txid,
-                'amount' => $amount,
-                'memo' => $txMemo,
-            ];
+                // --- Optional: fetch confirmations ---
+                $conf = '';
+                if (isset($txData['confirmations'])) {
+                    $conf = $txData['confirmations'];
+                }
+
+                return [
+                    'exists' => true,
+                    'txid' => $txid,
+                    'conf' => $conf,
+                    'matched_amount' => $amount,
+                    'matched_memo' => $txMemo,
+                ];
+            }
+        } catch (\Exception $e) {
+            \Log::error("Error processing transaction $txid: " . $e->getMessage());
         }
     }
 
-    if (!empty($matches)) {
-        return [
-            'ok' => true,
-            'provider_tx' => $matches[0]['txid'],
-            'matched_amount' => $matches[0]['amount'],
-            'matched_memo' => $matches[0]['memo'],
-            'all_matches' => $matches,
-        ];
-    }
-
-    \Log::debug('No matching transfers found via Nekosunevr API', [
-        'payment_id' => $payment->id,
-        'memo' => $memo,
-        'expected_amount' => $expectedAmount,
-        'recvAccount' => $recvAccount,
-        'sample_transactions' => array_slice($transactions, 0, 5),
-    ]);
-
-    return ['ok' => false, 'reason' => 'no matching transfer found in transactions'];
+    return ['exists' => false, 'txid' => '', 'conf' => ''];
 }
+
 
 
     /**
