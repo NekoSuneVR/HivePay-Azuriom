@@ -1,3 +1,4 @@
+<?php
 return [
     'account' => 'Hive Account',
     'currency' => 'Currency',
