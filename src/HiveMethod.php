@@ -141,163 +141,81 @@ class HiveMethod extends PaymentMethod
     protected function verifyPaymentOnChain(Payment $payment)
 {
     $memo = $payment->transaction_id;
-    $expectedAmount = $payment->price; // string
-    $expectedCurrency = $payment->currency;
+    $expectedAmount = floatval($payment->price); // numeric
+    $expectedCurrency = strtoupper($payment->currency); // HIVE or HBD
 
     if (!$memo || !$expectedAmount) {
         throw new \Exception('Payment missing hive metadata (memo/amount).');
     }
 
     $recvAccount = $this->gateway['account'] ?? 'chisfund';
-    if (!$recvAccount) {
-        throw new \Exception('Receiving Hive account not configured.');
-    }
 
-    $nodeUrl = $this->gateway['rpc'] ?? 'https://api.hive.blog';
-
-    $limit = 1000;
-    $start = -1; // latest ops
-
-    $body = [
-        'jsonrpc' => '2.0',
-        'method'  => 'account_history_api.get_account_history',
-        'params'  => [$recvAccount, $start, $limit],
-        'id'      => 1,
-    ];
-
-    $resp = Http::timeout(15)->post($nodeUrl, $body);
+    // --- 1. Fetch account info ---
+    $accountUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/address/{$recvAccount}";
+    $resp = Http::timeout(15)->get($accountUrl);
 
     if (!$resp->ok()) {
-        throw new \Exception('Failed to query Hive RPC: HTTP ' . $resp->status());
+        throw new \Exception('Failed to query Hive account: HTTP ' . $resp->status());
     }
 
-    $result = $resp->json();
+    $accountData = $resp->json();
+    $transactions = $accountData['transactions'] ?? [];
 
-    // defensive: find ops array
-    $ops = $result['result'] ?? $result['result']['history'] ?? [];
-    if (!is_array($ops)) {
-        // fallback using condenser API
-        $body2 = [
-            'jsonrpc' => '2.0',
-            'method' => 'condenser_api.get_account_history',
-            'params' => [$recvAccount, -1, $limit],
-            'id' => 2,
-        ];
-        $resp2 = Http::timeout(15)->post($nodeUrl, $body2);
-        $r2 = $resp2->json();
-        $ops = $r2['result'] ?? [];
+    if (empty($transactions)) {
+        return ['ok' => false, 'reason' => 'no transactions found for account'];
     }
 
-    \Log::debug('Hive RPC response', [
+    // --- 2. Scan each transaction ---
+    foreach ($transactions as $txid) {
+        $txUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/tx/{$recvAccount}/{$txid}";
+        $txResp = Http::timeout(15)->get($txUrl);
+
+        if (!$txResp->ok()) {
+            \Log::warning("Failed to fetch tx $txid for $recvAccount", ['status' => $txResp->status()]);
+            continue;
+        }
+
+        $tx = $txResp->json();
+
+        // vout contains outputs to account
+        foreach ($tx['vout'] ?? [] as $output) {
+            $to = $output['address'] ?? null;
+            $amount = floatval($output['value'] ?? 0);
+            $txMemo = $output['memo'] ?? null;
+
+            if (!$to || $to !== $recvAccount) continue;
+            if (!$txMemo || strpos($txMemo, $memo) === false) continue;
+
+            // Optional: detect HIVE/HBD via $expectedCurrency
+            // API returns "value" as float, currency can be inferred from payment currency
+
+            // compare amounts with tolerance
+            if (abs($amount - $expectedAmount) > 0.0005) {
+                continue;
+            }
+
+            // ✅ Payment matched
+            return [
+                'ok' => true,
+                'provider_tx' => $tx['txid'] ?? $txid,
+                'matched_amount' => $amount,
+                'matched_memo' => $txMemo,
+            ];
+        }
+    }
+
+    \Log::debug('No matching transfer found via Nekosunevr API', [
         'payment_id' => $payment->id,
         'memo' => $memo,
         'expected_amount' => $expectedAmount,
         'expected_currency' => $expectedCurrency,
         'recvAccount' => $recvAccount,
-        'sample_ops' => array_slice($ops, 0, 5),
+        'sample_transactions' => array_slice($transactions, 0, 5),
     ]);
 
-    foreach ($ops as $entry) {
-        $opName = null;
-        $opData = null;
-        $trxId = null;
-        $timestamp = null;
-
-        // normalize different RPC response formats
-        if (is_array($entry) && count($entry) >= 2 && is_array($entry[1])) {
-            $opName = $entry[1][0] ?? null;
-            $opData = $entry[1][1] ?? null;
-            $trxId = $entry[2] ?? null;
-        } elseif (is_array($entry) && isset($entry['op'])) {
-            $opName = $entry['op'][0] ?? null;
-            $opData = $entry['op'][1] ?? null;
-            $trxId = $entry['trx_id'] ?? null;
-            $timestamp = $entry['timestamp'] ?? null;
-        } elseif (is_object($entry)) {
-            $arr = (array)$entry;
-            if (isset($arr['op'])) {
-                $opName = $arr['op'][0] ?? null;
-                $opData = $arr['op'][1] ?? null;
-                $trxId = $arr['trx_id'] ?? null;
-                $timestamp = $arr['timestamp'] ?? null;
-            }
-        }
-
-        if ($opName !== 'transfer' || !is_array($opData)) {
-            continue;
-        }
-
-        $to = $opData['to'] ?? ($opData->to ?? null);
-        $amountStr = $opData['amount'] ?? ($opData->amount ?? null);
-        $memoField = $opData['memo'] ?? ($opData->memo ?? null);
-        $from = $opData['from'] ?? ($opData->from ?? null);
-
-        // debug each transfer op
-        \Log::debug('Checking transfer op', [
-            'to' => $to,
-            'from' => $from,
-            'amount' => $amountStr,
-            'memo' => $memoField,
-            'payment_memo' => $memo,
-            'expected_amount' => $expectedAmount,
-            'expected_currency' => $expectedCurrency,
-        ]);
-
-        if (!$to || !$amountStr) {
-            continue;
-        }
-
-        if (strtolower($to) !== strtolower($recvAccount)) {
-            continue;
-        }
-
-        if (!$memoField || strpos($memoField, $memo) === false) {
-            continue;
-        }
-
-        $parts = preg_split('/\s+/', trim($amountStr));
-        if (count($parts) < 2) {
-            continue;
-        }
-
-        $amt = floatval($parts[0]);
-        $cur = strtoupper(trim($parts[1]));
-
-        if ($cur !== strtoupper(trim($expectedCurrency))) {
-            continue;
-        }
-
-        $expectedFloat = floatval($expectedAmount);
-
-        // allow small rounding tolerance or accept slightly higher
-        if (abs($amt - $expectedFloat) > 0.001 && $amt < $expectedFloat) {
-            continue;
-        }
-
-        // Payment verified
-        $providerTx = $trxId ?? (is_string($timestamp) ? $timestamp . ':' . $from : null);
-
-        return [
-            'ok' => true,
-            'provider_tx' => $providerTx,
-            'matched_from' => $from,
-            'matched_amount' => $amountStr,
-            'matched_memo' => $memoField,
-        ];
-    }
-
-    \Log::debug('No matching transfer found', [
-        'payment_id' => $payment->id,
-        'recent_ops' => array_slice($ops, 0, 5),
-        'memo' => $memo,
-        'expected_amount' => $expectedAmount,
-        'expected_currency' => $expectedCurrency,
-    ]);
-
-    return ['ok' => false, 'reason' => 'no matching transfer found in latest account history'];
+    return ['ok' => false, 'reason' => 'no matching transfer found in transactions'];
 }
-
-
+    
     /**
      * Success redirect after user returns to site (if you want a thank-you page)
      */
