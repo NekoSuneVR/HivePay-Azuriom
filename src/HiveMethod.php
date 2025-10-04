@@ -150,7 +150,7 @@ class HiveMethod extends PaymentMethod
 
         $recvAccount = $this->gateway->data['account'] ?? null;
         if (!$recvAccount) {
-            throw new \Exception('Receiving Hive account not configured.');
+            throw new \Exception('Receiving Hive account not configured.'. $this->gateway);
         }
 
         $nodeUrl = rtrim($this->gateway->data['rpc'] ?? 'https://api.hive.blog', '/');
