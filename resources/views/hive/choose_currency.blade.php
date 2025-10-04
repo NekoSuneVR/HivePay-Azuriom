@@ -1,5 +1,3 @@
-<?php
-
 @extends('shop::layouts.app')
 
 @section('title', 'Choose Payment Currency')
