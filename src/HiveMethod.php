@@ -52,7 +52,7 @@ class HiveMethod extends PaymentMethod
 
     $recvAccount = $this->gateway->data['account'] ?? null;
     $nodeUrl = $this->gateway->data['rpc'] ?? 'https://api.hive.blog';
-    $expiresMinutes = intval($this->gateway->data['expires-minutes'] ?? 60);
+    $expiresMinutes = intval($this->gateway->data['expires'] ?? 60);
 
     return view('hivepay::payments.hive', [
         'payment' => $payment,
@@ -134,7 +134,7 @@ class HiveMethod extends PaymentMethod
             throw new \Exception('Receiving Hive account not configured.');
         }
 
-        $nodeUrl = $this->gateway->data['rpc'] ?? 'https://api.hive.blog';
+        $nodeUrl = rtrim($this->gateway->data['rpc'] ?? 'https://api.hive.blog', '/');
 
         // We'll use account_history_api.get_account_history which supports querying history with pagination.
         // Request: POST to nodeUrl with JSON-RPC body:
