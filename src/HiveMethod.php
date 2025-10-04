@@ -54,7 +54,7 @@ class HiveMethod extends PaymentMethod
     $nodeUrl = $this->gateway->data['rpc'] ?? 'https://api.hive.blog';
     $expiresMinutes = intval($this->gateway->data['expires'] ?? 60);
 
-    return view('hivepay::payments.hive', [
+    return view('hivepay::hive.pay', [
         'payment' => $payment,
         'memo' => $memo,
         'amount' => $payment->meta['expected_amount'],
