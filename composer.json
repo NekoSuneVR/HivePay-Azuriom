@@ -1,0 +1,11 @@
+{
+    "name": "azuriom/HivePay",
+    "type": "azuriom-plugin",
+    "description": "Hive Pay for shop",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Azuriom\\Plugin\\HivePay\\": "src/"
+        }
+    }
+}
