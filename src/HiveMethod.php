@@ -188,7 +188,7 @@ class HiveMethod extends PaymentMethod
             \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $output]);
 
             if (!$to || strtolower($to) !== strtolower($recvAccount)) continue;
-            if (!$txMemo || strpos($txMemo, $memo) === false) continue;
+            if (!$txMemo || trim($txMemo) !== trim($memo)) continue;
 
             if (abs($amount - $expectedAmount) > 0.0005) continue;
 
