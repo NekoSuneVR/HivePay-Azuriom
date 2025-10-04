@@ -31,7 +31,6 @@
 </div>
 @endsection
 
-@section('scripts')
 <script>
 // Check if Hive Keychain is installed
 const keychainBtn = document.getElementById('keychainBtn');
@@ -99,4 +98,3 @@ function checkPayment() {
 // poll every 30 seconds
 setInterval(checkPayment, 30000);
 </script>
-@endsection
