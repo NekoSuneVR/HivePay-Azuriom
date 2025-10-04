@@ -62,7 +62,7 @@ class HiveMethod extends PaymentMethod
     $currencyCode = $chosenCurrency === 'HIVE' ? 'HIV' : 'HBD';
     
     // create Azuriom Payment row
-    $payment = $this->createPayment($cart, $amount, $currencyCode);
+    $payment = $this->createPayment($cart, $converted, $currencyCode);
 
     $memo = strtoupper(Str::substr(Str::uuid()->toString(), 0, 12));
 
@@ -77,7 +77,7 @@ class HiveMethod extends PaymentMethod
     return view('hivepay::hive.pay', [
         'payment' => $payment,
         'memo' => $memo,
-        'amount' => $payment->meta['expected_amount'],
+        'amount' => $payment->meta['price'],
         'currency' => $chosenCurrency,
         'account' => $recvAccount,
         'nodeUrl' => $nodeUrl,
