@@ -177,13 +177,13 @@ class HiveMethod extends PaymentMethod
 
         $tx = $txResp->json();
 
-        \Log::debug('No matching transfer found via Nekosunevr API', ['TXRESP: ' => $tx]);
-
         // vout contains outputs to account
         foreach ($tx['vout'] ?? [] as $output) {
             $to = $output['address'] ?? null;
             $amount = floatval($output['value'] ?? 0);
             $txMemo = $output['memo'] ?? null;
+
+            \Log::debug('No matching transfer found via Nekosunevr API', ['TXRESP: ' => $output]);
 
             if (!$to || $to !== $recvAccount) continue;
             if (!$txMemo || strpos($txMemo, $memo) === false) continue;
