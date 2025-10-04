@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "url": "#",
     "authors": [
-        "Gru"
+        "NekoSuneVR"
     ],
     "providers": [
         "\\Azuriom\\Plugin\\HivePay\\Providers\\HiveServiceProvider"
