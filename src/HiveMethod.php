@@ -37,6 +37,28 @@ class HiveMethod extends PaymentMethod
 
     $chosenCurrency = strtoupper(request()->input('pay_currency'));
 
+    // Map Azuriom "HBD" to API's "hive_dollar"
+    $apiId = $chosenCurrency === 'HBD' ? 'hive_dollar' : 'hive';
+
+    // Shop base currency (from Azuriom config)
+    $baseCurrency = strtoupper(config('currency.iso') ?? 'USD');
+
+    // --- Fetch price feed from NekoGeko API ---
+    $url = "https://api.nekosunevr.co.uk/v5/cryptoapi/nekogeko/prices/{$baseCurrency}?id={$apiId}";
+
+    $feed = Http::timeout(10)->get($url)->json();
+
+    if (!isset($feed['current_price'])) {
+        throw new \Exception("Price feed unavailable for {$chosenCurrency}");
+    }
+
+    $priceInFiat = (float) $feed['current_price'];
+    
+    // If store currency is already HIVE or HBD, skip conversion
+    $converted = $baseCurrency === $chosenCurrency
+        ? number_format($amount, 3, '.', '')
+        : number_format($amount / $priceInFiat, 3, '.', '');
+    
     // create Azuriom Payment row
     $payment = $this->createPayment($cart, $amount, $chosenCurrency);
 
@@ -44,7 +66,7 @@ class HiveMethod extends PaymentMethod
 
     $payment->meta = [
         'hive_memo' => $memo,
-        'expected_amount' => number_format($amount, 3, '.', ''),
+        'expected_amount' => $converted,
         'expected_currency' => $chosenCurrency,
         'created_at' => Carbon::now()->toIso8601String(),
     ];
