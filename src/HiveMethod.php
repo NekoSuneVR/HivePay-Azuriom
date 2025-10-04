@@ -52,7 +52,7 @@ class HiveMethod extends PaymentMethod
 
         // Build instructions view route (you can create a blade view that uses $data)
         // We'll redirect to a small internal instruction page that shows memo and a "I've paid" check button
-        return view('cryptopay::hive.instructions', [
+        return view('hivepay::hive.instructions', [
             'payment' => $payment,
             'memo' => $memo,
             'amount' => $payment->meta['expected_amount'],
@@ -283,7 +283,7 @@ class HiveMethod extends PaymentMethod
 
     public function view()
     {
-        return 'cryptopay::admin.hive';
+        return 'hivepay::admin.hive';
     }
 
     public function rules()
@@ -300,6 +300,6 @@ class HiveMethod extends PaymentMethod
     public function image()
     {
         // supply your plugin assets for Hive/HBD
-        return asset('plugins/cryptopay/img/hive.svg');
+        return asset('plugins/hivepay/img/hive.svg');
     }
 }
