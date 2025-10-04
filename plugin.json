@@ -1,0 +1,17 @@
+{
+    "id": "hivepay",
+    "name": "Hive Pay",
+    "description": "Support for Hive Pay",
+    "version": "1.0.0",
+    "url": "#",
+    "authors": [
+        "Gru"
+    ],
+    "providers": [
+        "\\Azuriom\\Plugin\\Crypto\\Providers\\HiveServiceProvider"
+    ],
+    "dependencies": {
+        "shop": "^1.0.0"
+    },
+    "azuriom_api": "1.0.0"
+}
