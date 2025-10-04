@@ -1,5 +1,3 @@
-@extends('admin.layouts.admin')
-
 <div class="mb-3 col-md-6">
     <label class="form-label" for="accountInput">{{ trans('hivepay::messages.account') }}</label>
     <input type="text" class="form-control @error('account') is-invalid @enderror"
