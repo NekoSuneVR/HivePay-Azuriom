@@ -8,7 +8,7 @@
         "Gru"
     ],
     "providers": [
-        "\\Azuriom\\Plugin\\Crypto\\Providers\\HiveServiceProvider"
+        "\\Azuriom\\Plugin\\HivePay\\Providers\\HiveServiceProvider"
     ],
     "dependencies": {
         "shop": "^1.0.0"
