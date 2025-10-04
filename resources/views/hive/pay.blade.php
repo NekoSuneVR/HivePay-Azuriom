@@ -36,7 +36,7 @@ const keychainBtn = document.getElementById('keychainBtn');
 const hiveUsernameInput = document.getElementById('hiveUsername');
 
 if (window.hive_keychain) {
-    hiveUsernameInput.style.display = 'none';
+    hiveUsernameInput.style.display = 'block';
 }
 
 keychainBtn.addEventListener('click', function () {
