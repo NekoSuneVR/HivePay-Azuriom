@@ -290,8 +290,9 @@ class HiveMethod extends PaymentMethod
     public function rules()
     {
         return [
-            'account' => 'required|string',
-            'rpc' => 'required|string|url',
+            'account' => ['required', 'string'],
+            'rpc' => ['required', 'string'],
+            'expires' => ['nullable', 'int'],
         ];
     }
 
