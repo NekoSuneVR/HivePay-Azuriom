@@ -180,15 +180,15 @@ class HiveMethod extends PaymentMethod
         $tx = $txResp->json();
 
         foreach ($tx['vout'] ?? [] as $output) {
-            $to = $output['address'] ?? null;
-            $amount = $output['value'] ?? null;
-            $txMemo = $output['memo'] ?? null;
+            $to = $output['address'];
+            $amount = $output['value'];
+            $txMemo = $output['memo'];
 
             // log each output for debugging
             \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $output]);
 
-            if (!$to || strtolower($to) !== strtolower($recvAccount)) continue;
-            if (!$txMemo || trim($txMemo) !== trim($memo)) continue;
+            if ($to !== $recvAccount) continue;
+            if ($txMemo !== $memo) continue;
             if ($amount !== $expectedAmount) continue;
 
             // store match
