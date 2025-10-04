@@ -148,12 +148,12 @@ class HiveMethod extends PaymentMethod
             throw new \Exception('Payment missing hive metadata (memo/amount).');
         }
 
-        $recvAccount = $this->gateway->data['account'] ?? null;
+        $recvAccount = $this->gateway['account'] ?? 'chisfund';
         if (!$recvAccount) {
-            throw new \Exception('Receiving Hive account not configured.'. $this->gateway);
+            throw new \Exception('Receiving Hive account not configured.');
         }
 
-        $nodeUrl = rtrim($this->gateway->data['rpc'] ?? 'https://api.hive.blog', '/');
+        $nodeUrl = $this->gateway['rpc'] ?? 'https://api.hive.blog';
 
         // We'll use account_history_api.get_account_history which supports querying history with pagination.
         // Request: POST to nodeUrl with JSON-RPC body:
