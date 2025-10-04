@@ -66,13 +66,10 @@ class HiveMethod extends PaymentMethod
 
     $memo = strtoupper(Str::substr(Str::uuid()->toString(), 0, 12));
 
-    $payment->meta = [
-        'hive_memo' => $memo,
-        'expected_amount' => $converted,
-        'expected_currency' => $chosenCurrency,
-        'created_at' => Carbon::now()->toIso8601String(),
-    ];
-    $payment->save();
+    $payment->updateMeta('hive_memo', $memo);
+    $payment->updateMeta('expected_amount', $converted);
+    $payment->updateMeta('expected_currency', $chosenCurrency);
+    $payment->updateMeta('created_at', Carbon::now()->toIso8601String());
 
     $recvAccount = $this->gateway->data['account'] ?? null;
     $nodeUrl = $this->gateway->data['rpc'] ?? 'https://api.hive.blog';
