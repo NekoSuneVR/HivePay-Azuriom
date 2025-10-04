@@ -1,4 +1,4 @@
-@extends('shop::layouts.app')
+@extends('layouts.app')
 
 @section('title', 'Choose Payment Currency')
 
