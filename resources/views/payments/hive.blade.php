@@ -1,3 +1,5 @@
+<?php
+
 @extends('shop::layouts.app')
 
 @section('title', 'Pay with Hive')
