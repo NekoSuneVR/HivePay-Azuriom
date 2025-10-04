@@ -29,7 +29,6 @@
         <i class="bi bi-link-45deg"></i> Pay with HiveSigner
     </a>
 </div>
-@endsection
 
 <script>
 // Check if Hive Keychain is installed
@@ -93,3 +92,4 @@ function checkPayment() {
 // poll every 30 seconds
 setInterval(checkPayment, 30000);
 </script>
+@endsection
