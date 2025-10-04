@@ -77,7 +77,7 @@ class HiveMethod extends PaymentMethod
     return view('hivepay::hive.pay', [
         'payment' => $payment,
         'memo' => $memo,
-        'amount' => $payment->meta['price'],
+        'amount' => $payment->price,
         'currency' => $chosenCurrency,
         'account' => $recvAccount,
         'nodeUrl' => $nodeUrl,
@@ -140,10 +140,9 @@ class HiveMethod extends PaymentMethod
      */
     protected function verifyPaymentOnChain(Payment $payment)
     {
-        $meta = $payment->meta ?? [];
-        $memo = $meta['hive_memo'] ?? null;
-        $expectedAmount = $meta['expected_amount'] ?? null; // string
-        $expectedCurrency = $meta['expected_currency'] ?? 'HBD';
+        $memo = $payment->transaction_id;
+        $expectedAmount = $payment->price; // string
+        $expectedCurrency = $payment->currency;
 
         if (!$memo || !$expectedAmount) {
             throw new \Exception('Payment missing hive metadata (memo/amount).');
