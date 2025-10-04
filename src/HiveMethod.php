@@ -1,6 +1,6 @@
 <?php
 
-namespace Azuriom\Plugin\Crypto;
+namespace Azuriom\Plugin\HivePay;
 
 use Azuriom\Plugin\Shop\Cart\Cart;
 use Azuriom\Plugin\Shop\Models\Payment;
