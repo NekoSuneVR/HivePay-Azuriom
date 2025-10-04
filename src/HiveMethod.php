@@ -141,16 +141,14 @@ class HiveMethod extends PaymentMethod
     protected function verifyPaymentOnChain(Payment $payment)
 {
     $memo = $payment->transaction_id;
-    $expectedAmount = floatval($payment->price); // numeric
-    $expectedCurrency = strtoupper($payment->currency); // HIVE or HBD
+    $expectedAmount = (string)$payment->price; // exact string match
+    $recvAccount = $this->gateway['account'] ?? 'chisfund';
 
     if (!$memo || !$expectedAmount) {
         throw new \Exception('Payment missing hive metadata (memo/amount).');
     }
 
-    $recvAccount = $this->gateway['account'] ?? 'chisfund';
-
-    // --- 1. Fetch account info ---
+    // Fetch transactions from your API
     $accountUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/address/{$recvAccount}";
     $resp = Http::timeout(15)->get($accountUrl);
 
@@ -167,7 +165,7 @@ class HiveMethod extends PaymentMethod
 
     $matches = [];
 
-    // --- 2. Scan each transaction ---
+    // Scan each transaction
     foreach ($transactions as $txid) {
         $txUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/tx/{$recvAccount}/{$txid}";
         $txResp = Http::timeout(15)->get($txUrl);
@@ -179,14 +177,14 @@ class HiveMethod extends PaymentMethod
 
         $tx = $txResp->json();
 
-        foreach ($tx['vout'] ?? [] as $output) {
-            $to = $output['address'];
-            $amount = $output['value'];
-            $txMemo = $output['memo'];
+        foreach ($tx['vout'] ?? [] as $vout) {
+            $to = $vout['address'] ?? null;
+            $txMemo = $vout['memo'] ?? null;
+            $amount = isset($vout['value']) ? (string)$vout['value'] : null;
 
-            // log each output for debugging
-            \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $output]);
+            \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $vout]);
 
+            // exact match checks
             if ($to !== $recvAccount) continue;
             if ($txMemo !== $memo) continue;
             if ($amount !== $expectedAmount) continue;
@@ -201,13 +199,12 @@ class HiveMethod extends PaymentMethod
     }
 
     if (!empty($matches)) {
-        // return first match (or all if you want)
         return [
             'ok' => true,
             'provider_tx' => $matches[0]['txid'],
             'matched_amount' => $matches[0]['amount'],
             'matched_memo' => $matches[0]['memo'],
-            'all_matches' => $matches, // optional, for debugging
+            'all_matches' => $matches,
         ];
     }
 
@@ -219,8 +216,9 @@ class HiveMethod extends PaymentMethod
         'sample_transactions' => array_slice($transactions, 0, 5),
     ]);
 
-    return ['ok' => false, 'reason' => 'no matching transfer found'];
+    return ['ok' => false, 'reason' => 'no matching transfer found in transactions'];
 }
+
 
     /**
      * Success redirect after user returns to site (if you want a thank-you page)
