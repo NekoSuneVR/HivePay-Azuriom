@@ -16,9 +16,12 @@
     </div>
 
     {{-- Hive Keychain Button --}}
-    <button id="keychainBtn" class="btn btn-primary m-2">
-        <i class="bi bi-box-arrow-in-right"></i> Pay with Hive Keychain
-    </button>
+    <div class="my-2" id="keychainWrapper">
+        <button id="keychainBtn" class="btn btn-primary m-2">
+            <i class="bi bi-box-arrow-in-right"></i> Pay with Hive Keychain
+        </button>
+        <input type="text" id="hiveUsername" class="form-control mt-2" placeholder="Enter Hive username" style="display:none;">
+    </div>
 
     {{-- HiveSigner Button --}}
     <a href="https://hivesigner.com/sign/transfer?to={{ $account }}&amount={{ $amount }}%20{{ $currency }}&memo={{ urlencode($memo) }}"
@@ -30,27 +33,47 @@
 
 @section('scripts')
 <script>
-// --- Hive Keychain Button Logic ---
-document.getElementById('keychainBtn').addEventListener('click', function () {
-    if (window.hive_keychain) {
-        window.hive_keychain.requestTransfer(
-            "{{ auth()->user()->name ?? '' }}", // from user (if logged in with same name as Hive)
-            "{{ $account }}",                  // to
-            "{{ $amount }}",                   // amount
-            "{{ $memo }}",                     // memo
-            "{{ $currency }}",                 // HIVE or HBD
-            function (response) {
-                if (response.success) {
-                    alert("Transaction broadcasted! Please wait for confirmation.");
-                } else {
-                    alert("Keychain transfer failed.");
-                }
-            },
-            true
-        );
-    } else {
-        alert("Hive Keychain extension not found.");
+// Check if Hive Keychain is installed
+const keychainBtn = document.getElementById('keychainBtn');
+const hiveUsernameInput = document.getElementById('hiveUsername');
+
+if (!window.hive_keychain) {
+    alert("Hive Keychain not detected. You must enter your Hive username manually.");
+    hiveUsernameInput.style.display = 'block';
+} else {
+    // Optional: try to pre-fill username if user is logged in
+    // Hive Keychain cannot automatically detect logged-in username without requestPermission
+    hiveUsernameInput.style.display = 'none';
+}
+
+keychainBtn.addEventListener('click', function () {
+    let username = hiveUsernameInput.value || "{{ auth()->user()->name ?? '' }}";
+
+    if (!username) {
+        alert("Please enter your Hive username to continue.");
+        return;
     }
+
+    if (!window.hive_keychain) {
+        alert("Hive Keychain extension not found. Use HiveSigner or QR code.");
+        return;
+    }
+
+    window.hive_keychain.requestTransfer(
+        username,          // from
+        "{{ $account }}",  // to
+        "{{ $amount }}",   // amount
+        "{{ $memo }}",     // memo
+        "{{ $currency }}", // HIVE or HBD
+        function (response) {
+            if (response.success) {
+                alert("Transaction broadcasted! Please wait for confirmation.");
+            } else {
+                alert("Keychain transfer failed.");
+            }
+        },
+        true
+    );
 });
 
 // --- Auto Polling Payment Verification ---
