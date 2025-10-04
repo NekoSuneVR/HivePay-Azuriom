@@ -1,9 +1,9 @@
 <?php
 
-namespace Azuriom\Plugin\Crypto\Providers;
+namespace Azuriom\Plugin\HivePay\Providers;
 
 use Azuriom\Extensions\Plugin\BasePluginServiceProvider;
-use Azuriom\Plugin\Crypto\HiveMethod;
+use Azuriom\Plugin\HivePay\HiveMethod;
 
 class HiveServiceProvider extends BasePluginServiceProvider
 {
