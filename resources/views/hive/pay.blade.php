@@ -25,12 +25,12 @@
        target="_blank" class="btn btn-success m-2">
         <i class="bi bi-link-45deg"></i> Pay with HiveSigner
     </a>
-
 </div>
 @endsection
 
 @section('scripts')
 <script>
+// --- Hive Keychain Button Logic ---
 document.getElementById('keychainBtn').addEventListener('click', function () {
     if (window.hive_keychain) {
         window.hive_keychain.requestTransfer(
@@ -52,5 +52,28 @@ document.getElementById('keychainBtn').addEventListener('click', function () {
         alert("Hive Keychain extension not found.");
     }
 });
+
+// --- Auto Polling Payment Verification ---
+function checkPayment() {
+    fetch("{{ $check_url }}", {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        console.log("Check result:", data);
+        if (data.status === 'paid') {
+            alert("✅ Payment confirmed!");
+            window.location.href = "{{ route('shop.home') }}";
+        }
+    })
+    .catch(err => console.error("Check error:", err));
+}
+
+// poll every 30 seconds
+setInterval(checkPayment, 30000);
 </script>
 @endsection
