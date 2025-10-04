@@ -36,12 +36,7 @@
 const keychainBtn = document.getElementById('keychainBtn');
 const hiveUsernameInput = document.getElementById('hiveUsername');
 
-if (!window.hive_keychain) {
-    alert("Hive Keychain not detected. You must enter your Hive username manually.");
-    hiveUsernameInput.style.display = 'block';
-} else {
-    // Optional: try to pre-fill username if user is logged in
-    // Hive Keychain cannot automatically detect logged-in username without requestPermission
+if (window.hive_keychain) {
     hiveUsernameInput.style.display = 'none';
 }
 
