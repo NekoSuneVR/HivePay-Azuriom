@@ -165,6 +165,8 @@ class HiveMethod extends PaymentMethod
         return ['ok' => false, 'reason' => 'no transactions found for account'];
     }
 
+    $matches = [];
+
     // --- 2. Scan each transaction ---
     foreach ($transactions as $txid) {
         $txUrl = "https://api.nekosunevr.co.uk/v5/proxy/hiveapi/tx/{$recvAccount}/{$txid}";
@@ -177,47 +179,50 @@ class HiveMethod extends PaymentMethod
 
         $tx = $txResp->json();
 
-        // vout contains outputs to account
         foreach ($tx['vout'] ?? [] as $output) {
             $to = $output['address'] ?? null;
             $amount = floatval($output['value'] ?? 0);
             $txMemo = $output['memo'] ?? null;
 
-            \Log::debug('No matching transfer found via Nekosunevr API', ['TXRESP: ' => $output]);
+            // log each output for debugging
+            \Log::debug('Checking tx output', ['txid' => $txid, 'output' => $output]);
 
-            if (!$to || $to !== $recvAccount) continue;
+            if (!$to || strtolower($to) !== strtolower($recvAccount)) continue;
             if (!$txMemo || strpos($txMemo, $memo) === false) continue;
 
-            // Optional: detect HIVE/HBD via $expectedCurrency
-            // API returns "value" as float, currency can be inferred from payment currency
+            if (abs($amount - $expectedAmount) > 0.0005) continue;
 
-            // compare amounts with tolerance
-            if (abs($amount - $expectedAmount) > 0.000) {
-                continue;
-            }
-
-            // ✅ Payment matched
-            return [
-                'ok' => true,
-                'provider_tx' => $tx['txid'] ?? $txid,
-                'matched_amount' => $amount,
-                'matched_memo' => $txMemo,
+            // store match
+            $matches[] = [
+                'txid' => $tx['txid'] ?? $txid,
+                'amount' => $amount,
+                'memo' => $txMemo,
             ];
         }
     }
 
-    \Log::debug('No matching transfer found via Nekosunevr API', [
+    if (!empty($matches)) {
+        // return first match (or all if you want)
+        return [
+            'ok' => true,
+            'provider_tx' => $matches[0]['txid'],
+            'matched_amount' => $matches[0]['amount'],
+            'matched_memo' => $matches[0]['memo'],
+            'all_matches' => $matches, // optional, for debugging
+        ];
+    }
+
+    \Log::debug('No matching transfers found via Nekosunevr API', [
         'payment_id' => $payment->id,
         'memo' => $memo,
         'expected_amount' => $expectedAmount,
-        'expected_currency' => $expectedCurrency,
         'recvAccount' => $recvAccount,
         'sample_transactions' => array_slice($transactions, 0, 5),
     ]);
 
-    return ['ok' => false, 'reason' => 'no matching transfer found in transactions'];
+    return ['ok' => false, 'reason' => 'no matching transfer found'];
 }
-    
+
     /**
      * Success redirect after user returns to site (if you want a thank-you page)
      */
