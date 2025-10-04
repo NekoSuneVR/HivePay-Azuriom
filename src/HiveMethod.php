@@ -181,7 +181,7 @@ class HiveMethod extends PaymentMethod
 
         foreach ($tx['vout'] ?? [] as $output) {
             $to = $output['address'] ?? null;
-            $amountStr = $output['value'] ?? null;
+            $amount = $output['value'] ?? null;
             $txMemo = $output['memo'] ?? null;
 
             // log each output for debugging
