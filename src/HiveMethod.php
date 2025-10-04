@@ -82,7 +82,7 @@ class HiveMethod extends PaymentMethod
         'account' => $recvAccount,
         'nodeUrl' => $nodeUrl,
         'expires_at' => Carbon::now()->addMinutes($expiresMinutes),
-        'check_url' => route('shop.payments.notify', 'hivepay'),
+        'check_url' => route('hivepay.notify', $payment->id),
     ]);
 }
     /**
