@@ -31,3 +31,16 @@
     <span class="invalid-feedback" role="alert"><strong>{{ $message }}</strong></span>
     @enderror
 </div>
+
+<div class="mb-3 col-md-6">
+    <label class="form-label" for="expiresInput">{{ trans('hivepay::messages.expires') ?? 'Payment Expiry (minutes)' }}</label>
+    <input type="number" min="5" step="5"
+           id="expiresInput"
+           class="form-control @error('expires') is-invalid @enderror"
+           name="expires"
+           value="{{ old('expires', $gateway->data['expires'] ?? 60) }}">
+
+    @error('expires')
+    <span class="invalid-feedback" role="alert"><strong>{{ $message }}</strong></span>
+    @enderror
+</div>
