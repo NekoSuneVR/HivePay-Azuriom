@@ -1,3 +1,5 @@
+<?php
+
 use Illuminate\Support\Facades\Route;
 use Azuriom\Plugin\HivePay\HiveMethod;
 
