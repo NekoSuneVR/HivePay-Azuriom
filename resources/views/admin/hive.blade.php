@@ -1,50 +1,57 @@
-<div class="row g-3">
-    <div class="mb-3 col-md-6">
-        <label class="form-label" for="accountInput">{{ trans('hivepay::messages.account') }}</label>
-        <input type="text" class="form-control @error('account') is-invalid @enderror" 
-               id="accountInput" name="account" 
-               value="{{ old('account', $gateway->data['account'] ?? '') }}" required>
+@extends('shop::layouts.app')
 
-        @error('account')
-        <span class="invalid-feedback" role="alert"><strong>{{ $message }}</strong></span>
-        @enderror
+@section('title', 'Pay with Hive')
+
+@section('content')
+<div class="container text-center my-5">
+
+    <h2>Pay with {{ $currency }}</h2>
+    <p>Please send <strong>{{ $amount }} {{ $currency }}</strong> to:</p>
+    <h3><code>{{ $account }}</code></h3>
+    <p>Memo: <code>{{ $memo }}</code></p>
+
+    {{-- QR Code --}}
+    <div class="my-3">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode("hive://transfer?to=$account&amount=$amount%20$currency&memo=$memo") }}" 
+             alt="QR Code" class="img-fluid">
     </div>
 
-    <div class="mb-3 col-md-6">
-        <label class="form-label" for="currencyInput">{{ trans('hivepay::messages.currency') }}</label>
-        <select class="form-control @error('currency') is-invalid @enderror" 
-                id="currencyInput" name="currency" required>
-            <option value="HIVE" {{ old('currency', $gateway->data['currency'] ?? '') === 'HIVE' ? 'selected' : '' }}>HIVE</option>
-            <option value="HBD" {{ old('currency', $gateway->data['currency'] ?? '') === 'HBD' ? 'selected' : '' }}>HBD</option>
-        </select>
+    {{-- Hive Keychain Button --}}
+    <button id="keychainBtn" class="btn btn-primary m-2">
+        <i class="bi bi-box-arrow-in-right"></i> Pay with Hive Keychain
+    </button>
 
-        @error('currency')
-        <span class="invalid-feedback" role="alert"><strong>{{ $message }}</strong></span>
-        @enderror
-    </div>
+    {{-- HiveSigner Button --}}
+    <a href="https://hivesigner.com/sign/transfer?from={{ auth()->user()->name }}&to={{ $account }}&amount={{ $amount }}%20{{ $currency }}&memo={{ urlencode($memo) }}" 
+       target="_blank" class="btn btn-success m-2">
+        <i class="bi bi-link-45deg"></i> Pay with HiveSigner
+    </a>
 
-    <div class="mb-3 col-md-12">
-        <label class="form-label" for="rpcInput">{{ trans('hivepay::messages.rpc') }}</label>
-        <input type="text" class="form-control @error('rpc') is-invalid @enderror" 
-               id="rpcInput" name="rpc" 
-               value="{{ old('rpc', $gateway->data['rpc'] ?? 'https://api.hive.blog') }}" required>
-
-        @error('rpc')
-        <span class="invalid-feedback" role="alert"><strong>{{ $message }}</strong></span>
-        @enderror
-    </div>
 </div>
+@endsection
 
-<div class="alert alert-info">
-    <p>
-        <i class="bi bi-info-circle"></i>
-        @lang('hivepay::messages.setup', [
-            'notification' => '<code>'.route('shop.payments.notification', 'hivepay').'</code>'
-        ])
-    </p>
-
-    <p>
-        {{ trans('hivepay::messages.memo') }}
-        <code>{{ trans('hivepay::messages.memo_format', ['id' => '{payment_id}']) }}</code>
-    </p>
-</div>
+@section('scripts')
+<script>
+document.getElementById('keychainBtn').addEventListener('click', function () {
+    if (window.hive_keychain) {
+        window.hive_keychain.requestTransfer(
+            "{{ auth()->user()->name }}",   // from user
+            "{{ $account }}",              // to
+            "{{ $amount }}",               // amount
+            "{{ $memo }}",                 // memo
+            "{{ $currency }}",             // currency: HIVE or HBD
+            function (response) {
+                if (response.success) {
+                    alert("Transaction broadcasted! Please wait for confirmation.");
+                } else {
+                    alert("Keychain transfer failed.");
+                }
+            },
+            true // enforce transfer type
+        );
+    } else {
+        alert("Hive Keychain extension not found.");
+    }
+});
+</script>
+@endsection
