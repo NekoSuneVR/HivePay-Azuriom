@@ -25,45 +25,46 @@ class HiveMethod extends PaymentMethod
      * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
      */
     public function startPayment(Cart $cart, float $amount, string $currency)
-    {
-        // create Azuriom Payment row
-        $payment = $this->createPayment($cart, $amount, $currency);
-
-        // generate unique memo token (short)
-        $memo = strtoupper(Str::substr(Str::uuid()->toString(), 0, 12));
-
-        // store memo & expected amount in the payment meta so we can verify later
-        $payment->meta = array_merge($payment->meta ?? [], [
-            'hive_memo' => $memo,
-            'expected_amount' => number_format($amount, 3, '.', ''), // keep precision
-            'expected_currency' => strtoupper($currency), // usually HBD
-            'created_at' => Carbon::now()->toIso8601String(),
-        ]);
-        $payment->save();
-
-        // Read configured settings
-        $recvAccount = $this->gateway->data['receive-account'] ?? null;
-        $nodeUrl = $this->gateway->data['rpc-node'] ?? 'https://api.hive.blog';
-        $expiresMinutes = intval($this->gateway->data['expires-minutes'] ?? 60);
-
-        if (!$recvAccount) {
-            return response('Receiving Hive account not configured in payment gateway.', 500);
-        }
-
-        // Build instructions view route (you can create a blade view that uses $data)
-        // We'll redirect to a small internal instruction page that shows memo and a "I've paid" check button
-        return view('hivepay::hive.instructions', [
-            'payment' => $payment,
-            'memo' => $memo,
-            'amount' => $payment->meta['expected_amount'],
-            'currency' => $payment->meta['expected_currency'],
-            'recvAccount' => $recvAccount,
-            'nodeUrl' => $nodeUrl,
-            'expires_at' => Carbon::now()->addMinutes($expiresMinutes),
-            'check_url' => route('shop.payments.notify', 'hivepay'), // re-use notification route to check
+{
+    // If user hasn't chosen currency yet, show a selection page
+    if (request()->missing('pay_currency')) {
+        return view('hivepay::hive.choose_currency', [
+            'amount' => $amount,
+            'currencies' => ['HIVE', 'HBD'],
+            'form_action' => route('shop.payments.pay', ['hivepay']),
         ]);
     }
 
+    $chosenCurrency = strtoupper(request()->input('pay_currency'));
+
+    // create Azuriom Payment row
+    $payment = $this->createPayment($cart, $amount, $chosenCurrency);
+
+    $memo = strtoupper(Str::substr(Str::uuid()->toString(), 0, 12));
+
+    $payment->meta = [
+        'hive_memo' => $memo,
+        'expected_amount' => number_format($amount, 3, '.', ''),
+        'expected_currency' => $chosenCurrency,
+        'created_at' => Carbon::now()->toIso8601String(),
+    ];
+    $payment->save();
+
+    $recvAccount = $this->gateway->data['account'] ?? null;
+    $nodeUrl = $this->gateway->data['rpc'] ?? 'https://api.hive.blog';
+    $expiresMinutes = intval($this->gateway->data['expires-minutes'] ?? 60);
+
+    return view('hivepay::payments.hive', [
+        'payment' => $payment,
+        'memo' => $memo,
+        'amount' => $payment->meta['expected_amount'],
+        'currency' => $chosenCurrency,
+        'account' => $recvAccount,
+        'nodeUrl' => $nodeUrl,
+        'expires_at' => Carbon::now()->addMinutes($expiresMinutes),
+        'check_url' => route('shop.payments.notify', 'hivepay'),
+    ]);
+}
     /**
      * Notification/check endpoint. This will run verification against the Hive RPC.
      *
